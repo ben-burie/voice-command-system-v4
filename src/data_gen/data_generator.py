@@ -29,16 +29,16 @@ logger = logging.getLogger(__name__)
 # Defaults (override via generate_audio_for_command kwargs)
 # ---------------------------------------------------------------------------
 SPEAKERS = [f"v2/en_speaker_{i}" for i in range(10)]
-BASE_SAMPLES_PER_SPEAKER = 2
+BASE_SAMPLES_PER_SPEAKER = 1
 NUM_IO_THREADS = 4
 
-AUGMENTATION_POLICY = {
-    "noise":       {"enabled": True,      "snr_db":   [30, 20, 10]},
-    "tempo":       {"enabled": _LIBROSA,  "factors":  [0.85, 0.9, 0.95, 1.05, 1.1]},
-    "pitch":       {"enabled": _LIBROSA,  "steps":    [-2, -1, 1, 2]},
-    "compression": {"enabled": True,      "ratios":   [4, 8]},
-    "eq":          {"enabled": True,      "bands":    ["low_cut", "mid_boost", "high_cut"]},
-    "reverb":      {"enabled": True,      "strength": [0.3, 0.6]},
+AUGMENTATION_POLICY = { # 14 augs
+    "noise": {"enabled": True, "snr_db": [35, 30, 25]},                         
+    "tempo": {"enabled": _LIBROSA, "factors": [0.95, 1.05]},             
+    "pitch": {"enabled": _LIBROSA, "steps": [-1, 1]},                    
+    "compression": {"enabled": True, "ratios": [2.0, 4.0]},                       
+    "eq": {"enabled": True, "bands": ["low_cut", "mid_boost", "high_cut"]},       
+    "reverb": {"enabled": True, "strength": [0.3, 0.6]}
 }
 
 
