@@ -1,0 +1,19 @@
+commands:
+  Open_Youtube_on_Brave:
+    display_name: "Open Youtube on Brave"
+    action: open_url_in_browser
+    params:
+      url: "https://youtube.com"
+      browser: "brave"
+
+  Get_Me_Gmail:
+    display_name: "Get Me Gmail"
+    action: open_url
+    params:
+      url: "https://mail.google.com"
+
+  New_Word_Document:
+    display_name: "New Word Document"
+    action: open_application
+    params:
+      app: "winword.exe"
