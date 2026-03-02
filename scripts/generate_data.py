@@ -26,7 +26,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from data_gen.data_generator import generate_audio_for_command, load_models
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("generate_data.log"),
+    ],
+)
 logger = logging.getLogger(__name__)
 
 
