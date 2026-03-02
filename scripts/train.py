@@ -9,6 +9,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from datetime import date 
 
 # Make src/ importable without installing the package
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -26,8 +27,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+current_date = date.today()
+
 DEFAULT_DATA_DIR = "data"
-DEFAULT_CHECKPOINT = "models/voice_commander.pth"
+DEFAULT_CHECKPOINT = "models/default.pth"
 DEFAULT_WHISPER_MODEL = "turbo"
 DEFAULT_EPOCHS = 15
 DEFAULT_BATCH_SIZE = 8
@@ -35,6 +38,7 @@ DEFAULT_LR = 1e-4
 
 
 def main():
+
     parser = argparse.ArgumentParser(
         description="Train Whisper voice command classifier",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -58,6 +62,10 @@ def main():
         logger.error(f"No .wav files found in '{args.data_dir}'")
         sys.exit(1)
 
+    # Get model name
+    model_name = input("Enter name of model/test: ")
+    model_name = f"models/{current_date}_{model_name}"
+
     unique_labels = sorted(data_dict.keys())
     label_to_idx = {label: i for i, label in enumerate(unique_labels)}
     idx_to_label = {i: label for label, i in label_to_idx.items()}
@@ -73,9 +81,11 @@ def main():
     train_loader, val_loader = build_dataloaders(data_dict, label_to_idx, model.n_mels, args.batch_size)
     logger.info(f"Train: {len(train_loader.dataset)}  Val: {len(val_loader.dataset)}")
 
+    logger.info(f"Model: {model_name}")
+
     train_model(
         model, train_loader, val_loader, device,
-        args.epochs, args.lr, args.checkpoint,
+        args.epochs, args.lr, model_name,
         label_to_idx, idx_to_label, args.whisper_model, freeze,
     )
 
