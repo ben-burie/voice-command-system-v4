@@ -64,7 +64,7 @@ def main():
 
     # Get model name
     model_name = input("Enter name of model/test: ")
-    model_name = f"models/{current_date}_{model_name}"
+    model_name = f"models/{current_date}_{model_name}.pth"
 
     unique_labels = sorted(data_dict.keys())
     label_to_idx = {label: i for i, label in enumerate(unique_labels)}
