@@ -66,6 +66,9 @@ def main():
     model_name = input("Enter name of model/test: ")
     model_name = f"models/{current_date}_{model_name}.pth"
 
+    # Get desired epochs
+    epoch_input = int(input("Number of epochs: "))
+
     unique_labels = sorted(data_dict.keys())
     label_to_idx = {label: i for i, label in enumerate(unique_labels)}
     idx_to_label = {i: label for label, i in label_to_idx.items()}
@@ -85,7 +88,7 @@ def main():
 
     train_model(
         model, train_loader, val_loader, device,
-        args.epochs, args.lr, model_name,
+        epoch_input, args.lr, model_name,
         label_to_idx, idx_to_label, args.whisper_model, freeze,
     )
 
