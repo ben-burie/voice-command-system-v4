@@ -4,7 +4,6 @@ commands:
     action: open_url_in_browser
     params:
       url: "https://youtube.com"
-      browser: "brave"
 
   Get_Me_Gmail:
     display_name: "Get Me Gmail"
@@ -16,4 +15,46 @@ commands:
     display_name: "New Word Document"
     action: open_application
     params:
-      app: "winword.exe"
+      app: 
+
+  Open_Webex:
+    display_name: "Open Webex"
+    action: open_application
+    params:
+      app: 
+
+  Open_Spotify:
+    display_name: "Open Spotify"
+    action: open_application
+    params:
+      app: 
+
+  Open_Reddit:
+    display_name: "Open Reddit"
+    action: open_url
+    params:
+      url: "https://www.reddit.com"
+
+  Open_Notion:
+    display_name: "Open Notion"
+    action: open_url
+    params:
+      url: "https://www.notion.so"
+
+  Open_Calculator:
+    display_name: "Open Calculator"
+    action: open_application
+    params:
+      app: 
+
+  Open_ChatGPT:
+    display_name: "Open ChatGPT"
+    action: open_url
+    params:
+      url: "https://chat.openai.com"
+
+  Open_Weather:
+    display_name: "Open Weather"
+    action: open_url
+    params:
+      url: "https://weather.com"
