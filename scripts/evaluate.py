@@ -5,7 +5,7 @@ Test directory must mirror training format: test_data/<label>/*.wav
 
 Usage:
     python scripts/evaluate.py --checkpoint models/voice_commander.pth
-    python scripts/evaluate.py --checkpoint models/voice_commander.pth --test-dir test_data
+    python scripts/evaluate.py --checkpoint models/2026-03-22_simple_model_for_continual.pth --test-dir test_data_3cmd
 """
 
 import argparse
@@ -72,6 +72,7 @@ def main() -> None:
 
     model, label_to_idx, idx_to_label, _, _ = load_checkpoint(str(checkpoint_path), device=str(device))
     model.eval()
+    n_mels = model.n_mels
 
     test_data = _scan_test_dir(test_dir)
     if not test_data:
@@ -109,7 +110,7 @@ def main() -> None:
     for actual_label, wav_paths in sorted(test_data.items()):
         for wav_path in wav_paths:
             try:
-                mel, n_frames = preprocess_audio(str(wav_path))
+                mel, n_frames = preprocess_audio(str(wav_path), n_mels=n_mels)
             except Exception as e:
                 logger.warning("Skipping %s — preprocessing failed: %s", wav_path.name, e)
                 continue
