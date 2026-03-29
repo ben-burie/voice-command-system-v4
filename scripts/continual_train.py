@@ -7,12 +7,26 @@ Flow:
   2. Prompt for new command details → update commands.yaml
   3. Generate synthetic data for the new command via generate_data.py
   4. Build an expanded (N+1)-class model, copying old head weights into rows 0..N-1
-  5. Train with gradient zeroing on old rows — only the new row updates
+  5. Train using the selected strategy (see below)
   6. Save a new checkpoint with updated label maps
 
+Training strategies (--strategy):
+  1  New-only, hard freeze  — train only on new command data; old head rows are
+                              always gradient-zeroed so they never change.
+  2  New-only, soft freeze  — train only on new command data; per batch, old head
+                              rows update with probability --grad-update-prob (0.0 =
+                              always zero, 1.0 = always update). Allows controlled
+                              plasticity at the cost of some forgetting risk.
+  3  Replay (percentage)    — train on all new command data plus --replay-pct of
+                              each old class's available .wav files (e.g. 0.5 = 50%).
+                              Old head rows are still gradient-zeroed; only the new
+                              row is updated. Replay data keeps old classes visible
+                              to the loss without touching their weights.
+
 Usage:
-    python scripts/continual_train.py --checkpoint models/old.pth
-    python scripts/continual_train.py --checkpoint models/old.pth --replay-samples 50 --epochs 20
+    python scripts/continual_train.py --checkpoint models/old.pth --strategy 1
+    python scripts/continual_train.py --checkpoint models/old.pth --strategy 2 --grad-update-prob 0.3
+    python scripts/continual_train.py --checkpoint models/old.pth --strategy 3 --replay-pct 0.5
 """
 
 import argparse
@@ -154,12 +168,12 @@ def collect_files(
     new_label: str,
     data_dir: Path,
     old_labels: list[str],
-    replay_samples: int,
+    replay_pct: float = 0.0,
 ) -> tuple[list[str], list[str]]:
     """
     Returns (file_paths, labels) for:
       - All .wav files in data_dir/new_label
-      - Up to replay_samples random files per old class
+      - replay_pct fraction of .wav files per old class (strategy 3); 0.0 = no replay
     """
     file_paths: list[str] = []
     labels: list[str] = []
@@ -176,17 +190,19 @@ def collect_files(
     labels.extend([new_label] * len(new_files))
     logger.info("New class '%s': %d files", new_label, len(new_files))
 
-    if replay_samples > 0:
+    if replay_pct > 0.0:
         for old_label in old_labels:
             old_dir = data_dir / old_label
             if not old_dir.exists():
                 logger.warning("Replay: data dir not found for '%s', skipping.", old_label)
                 continue
             old_files = [str(f) for f in old_dir.iterdir() if f.suffix.lower() == ".wav"]
-            sampled = random.sample(old_files, min(replay_samples, len(old_files)))
+            n_replay = max(1, round(len(old_files) * replay_pct))
+            sampled = random.sample(old_files, min(n_replay, len(old_files)))
             file_paths.extend(sampled)
             labels.extend([old_label] * len(sampled))
-            logger.info("Replay '%s': %d files", old_label, len(sampled))
+            logger.info("Replay '%s': %d / %d files (%.0f%%)",
+                        old_label, len(sampled), len(old_files), replay_pct * 100)
 
     return file_paths, labels
 
@@ -224,10 +240,15 @@ def train_continual(
     label_to_idx: dict,
     idx_to_label: dict,
     whisper_model_name: str,
+    grad_update_prob: float = 0.0,
 ) -> None:
     """
-    Standard train/val loop with one addition: after each backward pass, old
-    head rows' gradients are zeroed so only the new class row gets updated.
+    Standard train/val loop.
+
+    grad_update_prob controls how often old head rows are allowed to update:
+      0.0 — always zero old rows (strategies 1 and 3, hard freeze)
+      1.0 — never zero old rows (full plasticity)
+      0 < p < 1 — per batch, zero old rows with probability (1 - p) (strategy 2)
     """
     # Only pass the head parameters — encoder is already frozen
     optimizer = torch.optim.AdamW(
@@ -238,26 +259,29 @@ def train_continual(
 
     for epoch in range(epochs):
         # --- Train ---
-        model.train()
+        model.train() # PyTorch module that sets model into training mode (activates dropout and batchnorm) - since the model uses none of these this line has no effect
         t_loss = t_correct = t_total = 0
         for mels, label_idxs, n_frames in train_loader:
-            mels = mels.to(device)
-            label_idxs = label_idxs.to(device)
-            n_frames = n_frames.to(device)
+            # Move data from CPU to GPU since the model runs on GPU, these need to be there too to do computations
+            mels = mels.to(device) # moves mels tensor from CPU to GPU for colab
+            label_idxs = label_idxs.to(device) # moves label_idx from CPU to GPU for colab
+            n_frames = n_frames.to(device) # moves n_frames to GPU for colab
 
-            optimizer.zero_grad()
-            logits = model(mels, n_frames)
-            loss = criterion(logits, label_idxs)
-            loss.backward()
+            optimizer.zero_grad() # clear gradients from previous batch
+            logits = model(mels, n_frames) # makes a prediction (logit = numerical assignment of each output command)
+            loss = criterion(logits, label_idxs) # Calculate loss
+            loss.backward() # Compute the gradient
 
-            # Zero gradients for old class rows before the weight update
-            with torch.no_grad():
-                if model.classifier.weight.grad is not None:
-                    model.classifier.weight.grad[:n_old] = 0
-                if model.classifier.bias.grad is not None:
-                    model.classifier.bias.grad[:n_old] = 0
+            # Per batch, decide whether to zero old head row gradients.
+            # If random() >= grad_update_prob the old rows are frozen this step.
+            if random.random() >= grad_update_prob:
+                with torch.no_grad():
+                    if model.classifier.weight.grad is not None:
+                        model.classifier.weight.grad[:n_old] = 0
+                    if model.classifier.bias.grad is not None:
+                        model.classifier.bias.grad[:n_old] = 0
 
-            optimizer.step()
+            optimizer.step() # Adjust weights
 
             t_loss += loss.item()
             t_correct += (logits.argmax(1) == label_idxs).sum().item()
@@ -314,11 +338,24 @@ def main() -> None:
                         help="Path to commands.yaml")
     parser.add_argument("--n-samples", type=int, default=2000,
                         help="Target .wav files to generate for the new command")
-    parser.add_argument("--replay-samples", type=int, default=0,
-                        help="Files per old class to include as replay (0 = no replay)")
+    parser.add_argument("--strategy", type=int, default=1, choices=[1, 2, 3],
+                        help="Training strategy: 1=new-only hard freeze, "
+                             "2=new-only soft freeze (stochastic grad update), "
+                             "3=new + percentage replay of old classes")
+    parser.add_argument("--grad-update-prob", type=float, default=0.5,
+                        help="[Strategy 2] Probability per batch that old head rows are "
+                             "allowed to update (0.0=always frozen, 1.0=always update)")
+    parser.add_argument("--replay-pct", type=float, default=0.5,
+                        help="[Strategy 3] Fraction of each old class's .wav files to "
+                             "include as replay data (e.g. 0.5 = 50%%)")
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--lr", type=float, default=1e-4)
     args = parser.parse_args()
+
+    if args.strategy == 2 and not (0.0 <= args.grad_update_prob <= 1.0):
+        parser.error("--grad-update-prob must be between 0.0 and 1.0")
+    if args.strategy == 3 and not (0.0 < args.replay_pct <= 1.0):
+        parser.error("--replay-pct must be between 0.0 (exclusive) and 1.0")
 
     data_dir = Path(args.data_dir)
     config_path = Path(args.config)
@@ -363,19 +400,33 @@ def main() -> None:
     if device.type == "cuda":
         torch.cuda.empty_cache()
 
-    # 7. Collect training data (new command + optional replay)
-    file_paths, labels = collect_files(new_label, data_dir, old_labels, args.replay_samples)
+    # 7. Collect training data according to chosen strategy
+    if args.strategy == 3:
+        replay_pct = args.replay_pct
+        grad_update_prob = 0.0
+        logger.info("Strategy 3: new-only data + %.0f%% replay per old class", replay_pct * 100)
+    elif args.strategy == 2:
+        replay_pct = 0.0
+        grad_update_prob = args.grad_update_prob
+        logger.info("Strategy 2: new-only data, old rows update with p=%.2f per batch", grad_update_prob)
+    else:
+        replay_pct = 0.0
+        grad_update_prob = 0.0
+        logger.info("Strategy 1: new-only data, old rows always frozen")
+
+    file_paths, labels = collect_files(new_label, data_dir, old_labels, replay_pct=replay_pct)
     train_loader, val_loader = build_dataloaders(
         file_paths, labels, label_to_idx, model.n_mels, args.batch_size
     )
     logger.info("Train: %d  Val: %d", len(train_loader.dataset), len(val_loader.dataset))
 
-    # 8. Train — only the new head row accumulates gradient updates
+    # 8. Train
     logger.info("Training new class '%s' for %d epochs → %s", new_label, epochs, checkpoint_out)
     train_continual(
         model, train_loader, val_loader, device,
         epochs, args.lr, n_old,
         checkpoint_out, label_to_idx, idx_to_label, whisper_model_name,
+        grad_update_prob=grad_update_prob,
     )
 
 
