@@ -4,3 +4,4 @@ CLAUDE.md
 *.pth
 *.md
 *.csv
+*.pt

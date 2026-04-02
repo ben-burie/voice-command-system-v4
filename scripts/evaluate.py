@@ -5,7 +5,7 @@ Test directory must mirror training format: test_data/<label>/*.wav
 
 Usage:
     python scripts/evaluate.py --checkpoint models/voice_commander.pth
-    python scripts/evaluate.py --checkpoint models/2026-03-22_simple_model_for_continual.pth --test-dir test_data_3cmd
+    python scripts/evaluate.py --checkpoint models/2026-03-30_strategy3_initialTest.pth --test-dir test_data_3cmd
 """
 
 import argparse
