@@ -7,12 +7,17 @@ from model.classifier import WhisperCommandClassifier
 
 logger = logging.getLogger(__name__)
 
-def save_checkpoint(path: str, model: WhisperCommandClassifier, label_to_idx: dict, idx_to_label: dict, 
+def save_checkpoint(path: str, model: WhisperCommandClassifier, label_to_idx: dict, idx_to_label: dict,
                     whisper_model_name: str, freeze_encoder: bool, val_acc: float, epoch: int) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
+    if freeze_encoder:
+        state = {"classifier_state_dict": model.classifier.state_dict()}
+    else:
+        logger.warning("Encoder was fine-tuned — saving full model state dict (checkpoint will be large).")
+        state = {"model_state_dict": model.state_dict()}
     torch.save(
         {
-            "model_state_dict": model.state_dict(),
+            **state,
             "label_to_idx": label_to_idx,
             "idx_to_label": idx_to_label,
             "whisper_model_name": whisper_model_name,
@@ -33,7 +38,11 @@ def load_checkpoint(checkpoint_path: str, device: str = "cpu"):
     freeze_encoder = ckpt.get("freeze_encoder", True)
 
     model = WhisperCommandClassifier(whisper_model_name, len(label_to_idx), freeze_encoder)
-    model.load_state_dict(ckpt["model_state_dict"])
+    if "classifier_state_dict" in ckpt:
+        model.classifier.load_state_dict(ckpt["classifier_state_dict"])
+    else:
+        logger.warning("Legacy checkpoint detected (full model_state_dict) — loading as-is.")
+        model.load_state_dict(ckpt["model_state_dict"])
     model.to(device)
 
     logger.info(
