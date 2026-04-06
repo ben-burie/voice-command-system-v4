@@ -17,7 +17,7 @@ Usage:
 
     # With pre-computed embeddings (skips Whisper encoder):
     python scripts/precompute_embeddings.py --checkpoint models/my_model.pth --test-dir test_data_3cmd
-    python scripts/evaluate_faster.py --checkpoint models/2026-03-30_strategy3_initialTest.pth --embeddings test_data_3cmd_embeddings.pt
+    python scripts/evaluate_faster.py --checkpoint models/2026-04-02_strategy3Update0.3.pth --embeddings test_data_3cmd_embeddings.pt
 """
 
 import argparse

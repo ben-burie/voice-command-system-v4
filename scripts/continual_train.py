@@ -63,39 +63,58 @@ AVAILABLE_ACTIONS = ["open_url", "open_url_in_browser", "open_application"]
 # Interactive prompts
 # ---------------------------------------------------------------------------
 
-def prompt_new_command() -> tuple[str, dict]:
-    """Prompt for new command metadata. Returns (label, commands.yaml entry dict)."""
+def prompt_new_command(
+    label: str | None = None,
+    display_name: str | None = None,
+    action: str | None = None,
+    url: str | None = None,
+    browser: str | None = None,
+    app: str | None = None,
+) -> tuple[str, dict]:
+    """Prompt for new command metadata. Returns (label, commands.yaml entry dict).
+
+    Any argument supplied via CLI skips the corresponding interactive prompt.
+    """
     print("\n=== New Command Setup ===")
 
-    label = input("Label key (e.g. Open_Spotify): ").strip()
-    while not label:
-        label = input("Label cannot be empty. Label key: ").strip()
+    if label is None:
+        label = input("Label key (e.g. Open_Spotify): ").strip()
+        while not label:
+            label = input("Label cannot be empty. Label key: ").strip()
 
     default_display = label.replace("_", " ")
-    display_name = input(f"Display name [{default_display}]: ").strip() or default_display
+    if display_name is None:
+        display_name = input(f"Display name [{default_display}]: ").strip() or default_display
 
-    print(f"\nAvailable actions: {', '.join(AVAILABLE_ACTIONS)}")
-    action = input("Action: ").strip()
-    while action not in AVAILABLE_ACTIONS:
-        action = input(f"Must be one of {AVAILABLE_ACTIONS}: ").strip()
+    if action is None:
+        print(f"\nAvailable actions: {', '.join(AVAILABLE_ACTIONS)}")
+        action = input("Action: ").strip()
+        while action not in AVAILABLE_ACTIONS:
+            action = input(f"Must be one of {AVAILABLE_ACTIONS}: ").strip()
 
     params: dict = {}
     if action == "open_url":
-        params["url"] = input("URL: ").strip()
+        params["url"] = url or input("URL: ").strip()
     elif action == "open_url_in_browser":
-        params["url"] = input("URL: ").strip()
-        params["browser"] = input("Browser (e.g. brave, chrome): ").strip()
+        params["url"] = url or input("URL: ").strip()
+        params["browser"] = browser or input("Browser (e.g. brave, chrome): ").strip()
     elif action == "open_application":
-        app = input("App name (leave blank for none): ").strip()
-        params["app"] = app or None
+        if app is None:
+            app = input("App name (leave blank for none): ").strip() or None
+        params["app"] = app
 
     return label, {"display_name": display_name, "action": action, "params": params}
 
 
-def prompt_training_config() -> tuple[str, int]:
-    """Prompt for output model name and epoch count (mirrors train.py style)."""
-    model_name = input("\nEnter name for the new checkpoint: ").strip()
-    epochs = int(input("Number of epochs: "))
+def prompt_training_config(model_name: str | None = None, epochs: int | None = None) -> tuple[str, int]:
+    """Prompt for output model name and epoch count (mirrors train.py style).
+
+    Arguments supplied via CLI skip the corresponding interactive prompt.
+    """
+    if model_name is None:
+        model_name = input("\nEnter name for the new checkpoint: ").strip()
+    if epochs is None:
+        epochs = int(input("Number of epochs: "))
     return model_name, epochs
 
 
@@ -341,18 +360,38 @@ def main() -> None:
     parser.add_argument("--strategy", type=int, default=1, choices=[1, 2, 3],
                         help="Training strategy: 1=new-only hard freeze, "
                              "2=new-only soft freeze (stochastic grad update), "
-                             "3=new + percentage replay of old classes")
-    parser.add_argument("--grad-update-prob", type=float, default=0.5,
-                        help="[Strategy 2] Probability per batch that old head rows are "
-                             "allowed to update (0.0=always frozen, 1.0=always update)")
+                             "3=new + percentage replay of old classes. "
+                             "Strategies 2 and 3 can be combined by passing both "
+                             "--grad-update-prob >0 and --replay-pct >0 with --strategy 3.")
+    parser.add_argument("--grad-update-prob", type=float, default=0.0,
+                        help="Probability per batch that old head rows are allowed to update "
+                             "(0.0=always frozen, 1.0=always update). Active for strategy 2; "
+                             "also accepted by strategy 3 to enable combined replay+soft-freeze.")
     parser.add_argument("--replay-pct", type=float, default=0.5,
                         help="[Strategy 3] Fraction of each old class's .wav files to "
                              "include as replay data (e.g. 0.5 = 50%%)")
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--lr", type=float, default=1e-4)
+    # Non-interactive overrides — supply these to skip all prompts (useful for Colab scripting)
+    parser.add_argument("--model-name", default=None,
+                        help="Output checkpoint name, e.g. 'run1_s2_p03' (skips interactive prompt)")
+    parser.add_argument("--epochs", type=int, default=None,
+                        help="Number of training epochs (skips interactive prompt)")
+    parser.add_argument("--new-label", default=None,
+                        help="Label key for the new command, e.g. 'Open_Spotify' (skips prompt)")
+    parser.add_argument("--new-display-name", default=None,
+                        help="Display name for the new command (skips prompt; defaults to label with underscores replaced)")
+    parser.add_argument("--new-action", default=None, choices=AVAILABLE_ACTIONS,
+                        help="Action type for the new command (skips prompt)")
+    parser.add_argument("--new-url", default=None,
+                        help="URL param for open_url / open_url_in_browser actions (skips prompt)")
+    parser.add_argument("--new-browser", default=None,
+                        help="Browser param for open_url_in_browser action (skips prompt)")
+    parser.add_argument("--new-app", default=None,
+                        help="App param for open_application action (skips prompt)")
     args = parser.parse_args()
 
-    if args.strategy == 2 and not (0.0 <= args.grad_update_prob <= 1.0):
+    if args.strategy in (2, 3) and not (0.0 <= args.grad_update_prob <= 1.0):
         parser.error("--grad-update-prob must be between 0.0 and 1.0")
     if args.strategy == 3 and not (0.0 < args.replay_pct <= 1.0):
         parser.error("--replay-pct must be between 0.0 (exclusive) and 1.0")
@@ -372,13 +411,20 @@ def main() -> None:
     old_labels = list(label_to_idx.keys())
     logger.info("Existing classes (%d): %s", n_old, old_labels)
 
-    # 2. Prompt for new command details + training config
-    new_label, entry = prompt_new_command()
+    # 2. Prompt for new command details + training config (CLI args skip the prompts)
+    new_label, entry = prompt_new_command(
+        label=args.new_label,
+        display_name=args.new_display_name,
+        action=args.new_action,
+        url=args.new_url,
+        browser=args.new_browser,
+        app=args.new_app,
+    )
     if new_label in label_to_idx:
         logger.error("Label '%s' already exists in this checkpoint. Aborting.", new_label)
         sys.exit(1)
 
-    model_name, epochs = prompt_training_config()
+    model_name, epochs = prompt_training_config(args.model_name, args.epochs)
     checkpoint_out = f"models/{date.today()}_{model_name}.pth"
 
     # 3. Update commands.yaml
@@ -403,8 +449,14 @@ def main() -> None:
     # 7. Collect training data according to chosen strategy
     if args.strategy == 3:
         replay_pct = args.replay_pct
-        grad_update_prob = 0.0
-        logger.info("Strategy 3: new-only data + %.0f%% replay per old class", replay_pct * 100)
+        grad_update_prob = args.grad_update_prob  # 0.0 = hard freeze (default); >0 = combined
+        if grad_update_prob > 0.0:
+            logger.info(
+                "Strategy 3+2 (combined): %.0f%% replay per old class, old rows update with p=%.2f",
+                replay_pct * 100, grad_update_prob,
+            )
+        else:
+            logger.info("Strategy 3: %.0f%% replay per old class, old rows always frozen", replay_pct * 100)
     elif args.strategy == 2:
         replay_pct = 0.0
         grad_update_prob = args.grad_update_prob
