@@ -260,6 +260,7 @@ def train_continual(
     idx_to_label: dict,
     whisper_model_name: str,
     grad_update_prob: float = 0.0,
+    freeze_encoder: bool = True,
 ) -> None:
     """
     Standard train/val loop.
@@ -333,7 +334,7 @@ def train_continual(
             best_val_acc = v_acc
             save_checkpoint(
                 checkpoint_path, model, label_to_idx, idx_to_label,
-                whisper_model_name, True, v_acc, epoch + 1,
+                whisper_model_name, freeze_encoder, v_acc, epoch + 1,
             )
             logger.info("  → Best checkpoint saved (val_acc=%.1f%%)", v_acc)
 
@@ -404,7 +405,7 @@ def main() -> None:
 
     # 1. Load existing checkpoint
     logger.info("Loading checkpoint: %s", args.checkpoint)
-    old_model, label_to_idx, idx_to_label, whisper_model_name, _ = load_checkpoint(
+    old_model, label_to_idx, idx_to_label, whisper_model_name, base_freeze_encoder = load_checkpoint(
         args.checkpoint, str(device)
     )
     n_old = len(label_to_idx)
@@ -479,6 +480,7 @@ def main() -> None:
         epochs, args.lr, n_old,
         checkpoint_out, label_to_idx, idx_to_label, whisper_model_name,
         grad_update_prob=grad_update_prob,
+        freeze_encoder=base_freeze_encoder,
     )
 
 
