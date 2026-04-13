@@ -1,6 +1,7 @@
 # Core ML
-torch
-torchaudio
+torch==2.5.1
+torchaudio==2.5.1
+torchvision==0.20.1
 openai-whisper
 
 # Data generation
@@ -13,5 +14,6 @@ scikit-learn
 # Config
 pyyaml
 
-# Optional — enables tempo and pitch augmentation in data_generator.py
-# librosa
+# Other
+tqdm
+librosa

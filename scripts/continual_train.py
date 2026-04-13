@@ -356,7 +356,7 @@ def main() -> None:
                         help="Root data directory (one subfolder per command class)")
     parser.add_argument("--config", default="config/commands.yaml",
                         help="Path to commands.yaml")
-    parser.add_argument("--n-samples", type=int, default=2000,
+    parser.add_argument("--n-samples", type=int, default=150,
                         help="Target .wav files to generate for the new command")
     parser.add_argument("--strategy", type=int, default=1, choices=[1, 2, 3],
                         help="Training strategy: 1=new-only hard freeze, "
@@ -390,6 +390,8 @@ def main() -> None:
                         help="Browser param for open_url_in_browser action (skips prompt)")
     parser.add_argument("--new-app", default=None,
                         help="App param for open_application action (skips prompt)")
+    parser.add_argument("--skip-generation", action="store_true",
+                        help="Skip synthetic data generation (data already exists in --data-dir)")
     args = parser.parse_args()
 
     if args.strategy in (2, 3) and not (0.0 <= args.grad_update_prob <= 1.0):
@@ -432,7 +434,10 @@ def main() -> None:
     update_commands_yaml(config_path, new_label, entry)
 
     # 4. Generate synthetic data for the new command
-    run_data_generation(new_label, args.n_samples, data_dir, config_path)
+    if args.skip_generation:
+        logger.info("Skipping data generation (--skip-generation set).")
+    else:
+        run_data_generation(new_label, args.n_samples, data_dir, config_path)
 
     # 5. Expand label maps (new label appended at index N, old indices unchanged)
     new_idx = n_old

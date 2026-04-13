@@ -49,11 +49,14 @@ def main():
                         help="Where to save the best model checkpoint")
     parser.add_argument("--whisper-model", default=DEFAULT_WHISPER_MODEL,
                         choices=["tiny", "base", "small", "medium", "turbo"])
-    parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS)
+    parser.add_argument("--epochs", type=int, default=None,
+                        help=f"Number of training epochs (skips interactive prompt; default {DEFAULT_EPOCHS} when prompting)")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--lr", type=float, default=DEFAULT_LR)
     parser.add_argument("--unfreeze-encoder", action="store_true",
                         help="Fine-tune the full Whisper encoder (slower, needs more data)")
+    parser.add_argument("--model-name", default=None,
+                        help="Output checkpoint name, e.g. 'run1' (skips interactive prompt)")
     args = parser.parse_args()
 
     logger.info(f"Loading data from '{args.data_dir}'...")
@@ -62,12 +65,18 @@ def main():
         logger.error(f"No .wav files found in '{args.data_dir}'")
         sys.exit(1)
 
-    # Get model name
-    model_name = input("Enter name of model/test: ")
-    model_name = f"models/{current_date}_{model_name}.pth"
+    # Get model name (skip prompt if provided via CLI)
+    if args.model_name is not None:
+        model_name = f"models/{current_date}_{args.model_name}.pth"
+    else:
+        model_name = input("Enter name of model/test: ")
+        model_name = f"models/{current_date}_{model_name}.pth"
 
-    # Get desired epochs
-    epoch_input = int(input("Number of epochs: "))
+    # Get desired epochs (skip prompt if provided via CLI)
+    if args.epochs is not None:
+        epoch_input = args.epochs
+    else:
+        epoch_input = int(input("Number of epochs: "))
 
     unique_labels = sorted(data_dict.keys())
     label_to_idx = {label: i for i, label in enumerate(unique_labels)}
