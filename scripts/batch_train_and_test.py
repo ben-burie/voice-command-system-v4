@@ -8,7 +8,6 @@ from pathlib import Path
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-BASE_CHECKPOINT = "models/2026-03-22_simple_model_for_continual.pth"
 TEST_DIR_BASE = "test_data_original_3"   # 3-command test set (base model evaluation)
 TEST_DIR_CONTINUAL = "test_data"         # 4-command test set (continual model evaluation)
 
@@ -30,7 +29,7 @@ NEW_DATA_300 = 300   # --n-samples for the new command (second batch of runs)
 
 RESULTS_CSV = f"model_eval/batch_results_{TODAY}.csv"
 
-# ── 12 test configurations from the test table (2026-04-13) ──────────────────
+# ── 10 test configurations ────────────────────────────────────────────────────
 #
 #  Test  | Grad update prob | Replay pct | Model name
 #  ------+------------------+------------+-----------
@@ -41,11 +40,9 @@ RESULTS_CSV = f"model_eval/batch_results_{TODAY}.csv"
 #   5    |       0.0        |    0.1     | s3_r10        (strategy 3 replay-only)
 #   6    |       0.0        |    0.3     | s3_r30
 #   7    |       0.0        |    0.5     | s3_r50
-#   8    |       0.0        |    1.0     | s3_r100
-#   9    |       0.3        |    0.3     | s32_p30_r30   (strategy 3+2 combined)
-#  10    |       0.3        |    0.7     | s32_p30_r70
-#  11    |       0.7        |    0.3     | s32_p70_r30
-#  12    |       0.7        |    0.7     | s32_p70_r70
+#   8    |       0.3        |    0.3     | s32_p30_r30   (strategy 3+2 combined)
+#   9    |       0.7        |    0.3     | s32_p70_r30
+#  10    |       0.7        |    0.7     | s32_p70_r70
 
 RUNS = [
     {"strategy": 1, "grad-update-prob": 0.0, "replay-pct": 0.0, "model-name": "s1_base"},
@@ -55,9 +52,7 @@ RUNS = [
     {"strategy": 3, "grad-update-prob": 0.0, "replay-pct": 0.1, "model-name": "s3_r10"},
     {"strategy": 3, "grad-update-prob": 0.0, "replay-pct": 0.3, "model-name": "s3_r30"},
     {"strategy": 3, "grad-update-prob": 0.0, "replay-pct": 0.5, "model-name": "s3_r50"},
-    {"strategy": 3, "grad-update-prob": 0.0, "replay-pct": 1.0, "model-name": "s3_r100"},
     {"strategy": 3, "grad-update-prob": 0.3, "replay-pct": 0.3, "model-name": "s32_p30_r30"},
-    {"strategy": 3, "grad-update-prob": 0.3, "replay-pct": 0.7, "model-name": "s32_p30_r70"},
     {"strategy": 3, "grad-update-prob": 0.7, "replay-pct": 0.3, "model-name": "s32_p70_r30"},
     {"strategy": 3, "grad-update-prob": 0.7, "replay-pct": 0.7, "model-name": "s32_p70_r70"},
 ]
@@ -169,7 +164,7 @@ def run_base_model(name: str, data_dir: str) -> str:
     return checkpoint_path
 
 
-def run_continual(base_checkpoint: str, run: dict, n_samples: int, suffix: str = "", skip_generation: bool = False) -> None:
+def run_continual(base_checkpoint: str, run: dict, n_samples: int, data_dir: str, suffix: str = "", skip_generation: bool = False) -> None:
     model_name = run["model-name"] + suffix
     checkpoint_out = f"models/{TODAY}_{model_name}.pth"
 
@@ -189,6 +184,7 @@ def run_continual(base_checkpoint: str, run: dict, n_samples: int, suffix: str =
         "--batch-size", str(BATCH_SIZE),
         "--lr", str(LR),
         "--n-samples", str(n_samples),
+        "--data-dir", data_dir,
     ]
     if skip_generation:
         cmd.append("--skip-generation")
@@ -255,12 +251,12 @@ print("\n" + "="*60)
 print("Continual training on Base Model A — 150 new files")
 print("="*60)
 for i, run in enumerate(RUNS):
-    run_continual(BASE_MODEL_A_PATH, run, n_samples=NEW_DATA_150, suffix="_A150", skip_generation=(i > 0))
+    run_continual(BASE_MODEL_A_PATH, run, n_samples=NEW_DATA_150, data_dir=TRAINING_DATASET_150, suffix="_A150", skip_generation=(i > 0))
 
-# ── Continual training: Base Model A + 300 new files ─────────────────────────
+# ── Continual training: Base Model B + 300 new files ─────────────────────────
 
 print("\n" + "="*60)
-print("Continual training on Base Model A — 300 new files")
+print("Continual training on Base Model B — 300 new files")
 print("="*60)
 for i, run in enumerate(RUNS):
-    run_continual(BASE_MODEL_A_PATH, run, n_samples=NEW_DATA_300, suffix="_A300", skip_generation=(i > 0))
+    run_continual(BASE_MODEL_B_PATH, run, n_samples=NEW_DATA_300, data_dir=TRAINING_DATASET_300, suffix="_B300", skip_generation=(i > 0))

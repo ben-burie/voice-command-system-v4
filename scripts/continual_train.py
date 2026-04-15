@@ -430,13 +430,11 @@ def main() -> None:
     model_name, epochs = prompt_training_config(args.model_name, args.epochs)
     checkpoint_out = f"models/{date.today()}_{model_name}.pth"
 
-    # 3. Update commands.yaml
-    update_commands_yaml(config_path, new_label, entry)
-
-    # 4. Generate synthetic data for the new command
+    # 3. Update commands.yaml and generate synthetic data for the new command
     if args.skip_generation:
-        logger.info("Skipping data generation (--skip-generation set).")
+        logger.info("Skipping data generation and commands.yaml update (--skip-generation set).")
     else:
+        update_commands_yaml(config_path, new_label, entry)
         run_data_generation(new_label, args.n_samples, data_dir, config_path)
 
     # 5. Expand label maps (new label appended at index N, old indices unchanged)
